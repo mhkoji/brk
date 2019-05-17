@@ -3,6 +3,12 @@
   (:export :main))
 (in-package :brk)
 
+(defun draw (surface)
+  (sdl:draw-box-* 10 440 30 5
+                  :surface surface
+                  :color sdl:*white*)
+  (sdl:update-display surface))
+
 (defun main ()
   (sdl:with-init ()
     (sdl:window 320 480
@@ -13,4 +19,4 @@
       (:video-expose-event ()
         (sdl:update-display))
       (:idle ()
-        (sdl:update-display)))))
+        (draw sdl:*default-display*)))))
