@@ -38,26 +38,31 @@
    (y :initarg :vy
       :accessor velocity-y)))
 
-(let ((unit 2))
-  (defun move-left (positionable)
-    (let ((pos (position positionable)))
-      (incf (position-x pos) (- unit))))
-
-  (defun move-right (positionable)
-    (let ((pos (position positionable)))
-      (incf (position-x pos) unit)))
-
-  (defun move-by-velocity (positionable)
-    (let ((pos (position positionable)))
-      (incf (position-x pos) (* unit (velocity-x positionable)))
-      (incf (position-y pos) (* unit (velocity-y positionable))))))
-
-
 (defclass world-paddle (paddle positionable) ())
 
 (defclass world-ball (ball positionable velocity) ())
 
 (defstruct world width height paddle ball)
+
+(let ((unit 2))
+  (defun move-paddle-left (world)
+    (let ((pos (position (world-paddle world))))
+      (when (< 0 (position-x pos))
+        (incf (position-x pos) (- unit)))))
+
+  (defun move-paddle-right (world)
+    (let ((paddle (world-paddle world)))
+      (let ((pos (position paddle)))
+        (when (< (+ (position-x pos)
+                    (paddle-w paddle)
+                    unit)
+                 (world-width world))
+          (incf (position-x pos) unit)))))
+
+  (defun move-by-velocity (positionable)
+    (let ((pos (position positionable)))
+      (incf (position-x pos) (* unit (velocity-x positionable)))
+      (incf (position-y pos) (* unit (velocity-y positionable))))))
 
 (defun change-ball-direction-on-collision-againt-wall (world wall)
   (let ((ball (world-ball world)))
@@ -120,11 +125,10 @@
         (:video-expose-event ()
           (sdl:update-display))
         (:idle ()
-          (let ((paddle (world-paddle world)))
-            (cond ((sdl:key-down-p :sdl-key-left)
-                   (move-left paddle))
-                  ((sdl:key-down-p :sdl-key-right)
-                   (move-right paddle))))
+          (cond ((sdl:key-down-p :sdl-key-left)
+                 (move-paddle-left world))
+                ((sdl:key-down-p :sdl-key-right)
+                 (move-paddle-right world)))
           (cond (playing-p
                  (dolist (wall '(:left :right :top))
                    (change-ball-direction-on-collision-againt-wall
