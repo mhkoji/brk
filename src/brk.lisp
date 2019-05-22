@@ -118,7 +118,7 @@
 
 (defun main ()
   (let ((world (make-world
-                :width 320
+                :width 290
                 :height 480
                 :ball (make-instance 'world-ball
                        :r 5
@@ -130,11 +130,18 @@
                          :h 5
                          :position (make-position :x 10 :y 440))
                 :walls (list :left :right :top)
-                :bricks (list (make-instance 'world-brick
-                                             :w 30
-                                             :h 5
-                                             :position (make-position
-                                                        :x 10 :y 20)))))
+                :bricks (loop for y = 20 then (+ y 20)
+                              while (< y 80)
+                              nconc
+                              (loop for x = 10 then (+ x 40)
+                                    while (< (+ x 30) 320)
+                                    collect
+                                    (make-instance 'world-brick
+                                                   :w 30
+                                                   :h 5
+                                                   :position
+                                                   (make-position
+                                                    :x x :y y))))))
         (playing-p t))
     (sdl:with-init ()
       (sdl:window (world-width world)
