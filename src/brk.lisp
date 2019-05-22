@@ -10,6 +10,10 @@
    (h :initarg :h
       :reader paddle-h)))
 
+(defclass ball ()
+  ((r :initarg :r
+      :reader ball-r)))
+
 ;;;
 
 (defstruct position x y)
@@ -18,37 +22,49 @@
   ((position :initarg :position
              :accessor position)))
 
-(defun move (positionable direction)
-  (let ((pos (position positionable))
-        (unit 2))
-    (case direction
-      (:left
-       (incf (position-x pos) (- unit)))
-      (:right
-       (incf (position-x pos) unit)))))
+(let ((unit 2))
+  (defun move-left (positionable)
+    (let ((pos (position positionable)))
+      (incf (position-x pos) (- unit))))
+
+  (defun move-right (positionable)
+    (let ((pos (position positionable)))
+      (incf (position-x pos) unit))))
 
 
-(defclass positionable-paddle (paddle positionable) ())
+(defclass world-paddle (paddle positionable) ())
 
-(defun draw (paddle surface)
-  (sdl:clear-display sdl:*black*
-                     :surface surface)
+(defclass world-ball (ball positionable) ())
+
+(defstruct world width height paddle ball)
+
+(defgeneric draw (object surface))
+
+(defmethod draw ((ball world-ball) surface)
+  (let ((pos (position ball)))
+    (sdl:draw-filled-circle-* (position-x pos)
+                              (position-y pos)
+                              (ball-r ball)
+                              :surface surface
+                              :color sdl:*white*)))
+
+(defmethod draw ((paddle world-paddle) surface)
   (let ((pos (position paddle)))
     (sdl:draw-box-* (position-x pos)
                     (position-y pos)
                     (paddle-w paddle)
                     (paddle-h paddle)
                     :surface surface
-                    :color sdl:*white*))
-  (sdl:update-display surface))
-
-(defstruct world width height paddle)
+                    :color sdl:*white*)))
 
 (defun main ()
   (let ((world (make-world
                 :width 320
                 :height 480
-                :paddle (make-instance 'positionable-paddle
+                :ball (make-instance 'world-ball
+                       :r 5
+                       :position (make-position :x 10 :y 420))
+                :paddle (make-instance 'world-paddle
                          :w 30
                          :h 5
                          :position (make-position :x 10 :y 440)))))
@@ -64,7 +80,10 @@
         (:idle ()
           (let ((paddle (world-paddle world)))
             (cond ((sdl:key-down-p :sdl-key-left)
-                   (move paddle :left))
+                   (move-left paddle))
                   ((sdl:key-down-p :sdl-key-right)
-                   (move paddle :right)))
-            (draw paddle sdl:*default-display*)))))))
+                   (move-right paddle)))
+            (sdl:clear-display sdl:*black*)
+            (draw (world-ball world) sdl:*default-display*)
+            (draw paddle sdl:*default-display*)
+            (sdl:update-display)))))))
