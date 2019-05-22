@@ -22,11 +22,21 @@
   ((position :initarg :position
              :accessor position)))
 
+(defun square (x) (* x x))
+
+(defun squared-distance (positionable1 positionable2)
+  (let ((pos1 (position positionable1))
+        (pos2 (position positionable2)))
+    (+ (square (- (position-x pos1)
+                  (position-x pos2)))
+       (square (- (position-y pos1)
+                  (position-y pos2))))))
+
 (defclass velocity ()
   ((x :initarg :vx
-      :reader velocity-x)
+      :accessor velocity-x)
    (y :initarg :vy
-      :reader velocity-y)))
+      :accessor velocity-y)))
 
 (let ((unit 2))
   (defun move-left (positionable)
@@ -49,6 +59,25 @@
 
 (defstruct world width height paddle ball)
 
+(defun change-ball-direction-on-collision-againt-wall (world wall)
+  (let ((ball (world-ball world)))
+    (let ((pos (position ball)))
+      (ecase wall
+        (:left
+         (when (< (position-x pos) 0)
+           (setf (velocity-x ball) (- (velocity-x ball)))))
+        (:right
+         (when (< (world-width world) (position-x pos))
+           (setf (velocity-x ball) (- (velocity-x ball)))))
+        (:top
+         (when (< (position-y pos) 0)
+           (setf (velocity-y ball) (- (velocity-y ball)))))))))
+
+(defun ball-out-of-world-p (world)
+  (let ((pos (position (world-ball world))))
+    (< (world-height world) (position-y pos))))
+
+
 (defgeneric draw (object surface))
 
 (defmethod draw ((ball world-ball) surface)
@@ -67,7 +96,6 @@
                     (paddle-h paddle)
                     :surface surface
                     :color sdl:*white*)))
-
 (defun main ()
   (let ((world (make-world
                 :width 320
@@ -80,7 +108,8 @@
                 :paddle (make-instance 'world-paddle
                          :w 30
                          :h 5
-                         :position (make-position :x 10 :y 440)))))
+                         :position (make-position :x 10 :y 440))))
+        (playing-p t))
     (sdl:with-init ()
       (sdl:window (world-width world)
                   (world-height world)
@@ -96,9 +125,21 @@
                    (move-left paddle))
                   ((sdl:key-down-p :sdl-key-right)
                    (move-right paddle))))
-          (let ((ball (world-ball world)))
-            (move-by-velocity ball))
-          (sdl:clear-display sdl:*black*)
-          (draw (world-ball world) sdl:*default-display*)
-          (draw (world-paddle world) sdl:*default-display*)
-          (sdl:update-display))))))
+          (cond (playing-p
+                 (dolist (wall '(:left :right :top))
+                   (change-ball-direction-on-collision-againt-wall
+                    world wall))
+                 (let ((ball (world-ball world)))
+                   (move-by-velocity ball))
+                 (when (ball-out-of-world-p world)
+                   (setf playing-p nil))
+                 (sdl:clear-display sdl:*black*)
+                 (draw (world-ball world) sdl:*default-display*)
+                 (draw (world-paddle world) sdl:*default-display*)
+                 (sdl:update-display))
+                (t
+                 (sdl:clear-display sdl:*black*)
+                 (draw (world-paddle world) sdl:*default-display*)
+                 (sdl:draw-string-solid-* "Game Over!"
+                                          10 10)
+                 (sdl:update-display))))))))
