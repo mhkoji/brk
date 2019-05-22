@@ -22,6 +22,12 @@
   ((position :initarg :position
              :accessor position)))
 
+(defclass velocity ()
+  ((x :initarg :vx
+      :reader velocity-x)
+   (y :initarg :vy
+      :reader velocity-y)))
+
 (let ((unit 2))
   (defun move-left (positionable)
     (let ((pos (position positionable)))
@@ -29,12 +35,17 @@
 
   (defun move-right (positionable)
     (let ((pos (position positionable)))
-      (incf (position-x pos) unit))))
+      (incf (position-x pos) unit)))
+
+  (defun move-by-velocity (positionable)
+    (let ((pos (position positionable)))
+      (incf (position-x pos) (* unit (velocity-x positionable)))
+      (incf (position-y pos) (* unit (velocity-y positionable))))))
 
 
 (defclass world-paddle (paddle positionable) ())
 
-(defclass world-ball (ball positionable) ())
+(defclass world-ball (ball positionable velocity) ())
 
 (defstruct world width height paddle ball)
 
@@ -42,8 +53,8 @@
 
 (defmethod draw ((ball world-ball) surface)
   (let ((pos (position ball)))
-    (sdl:draw-filled-circle-* (position-x pos)
-                              (position-y pos)
+    (sdl:draw-filled-circle-* (ceiling (position-x pos))
+                              (ceiling (position-y pos))
                               (ball-r ball)
                               :surface surface
                               :color sdl:*white*)))
@@ -63,6 +74,8 @@
                 :height 480
                 :ball (make-instance 'world-ball
                        :r 5
+                       :vx (sin (/ pi 4))
+                       :vy (- (sin (/ pi 4)))
                        :position (make-position :x 10 :y 420))
                 :paddle (make-instance 'world-paddle
                          :w 30
@@ -82,8 +95,10 @@
             (cond ((sdl:key-down-p :sdl-key-left)
                    (move-left paddle))
                   ((sdl:key-down-p :sdl-key-right)
-                   (move-right paddle)))
-            (sdl:clear-display sdl:*black*)
-            (draw (world-ball world) sdl:*default-display*)
-            (draw paddle sdl:*default-display*)
-            (sdl:update-display)))))))
+                   (move-right paddle))))
+          (let ((ball (world-ball world)))
+            (move-by-velocity ball))
+          (sdl:clear-display sdl:*black*)
+          (draw (world-ball world) sdl:*default-display*)
+          (draw (world-paddle world) sdl:*default-display*)
+          (sdl:update-display))))))
