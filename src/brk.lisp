@@ -56,6 +56,24 @@
          (when (< (position-y pos) 0)
            (setf (velocity-y ball) (- (velocity-y ball)))))))))
 
+(defun change-ball-direction-on-collision (world)
+  (let ((ball (world-ball world)))
+    (setf (velocity-y ball) (- (velocity-y ball)))))
+
+(defun collide-p (ball obj &key w h)
+  (labels ((square (x)
+             (* x x)))
+    (let ((ball-pos (position ball))
+          (obj-pos (position obj)))
+      (< (+ (square (- (+ (position-x obj-pos)
+                          (/ (funcall w obj) 2))
+                       (position-x ball-pos)))
+            (square (- (+ (position-y obj-pos)
+                          (/ (funcall h obj) 2))
+                       (position-y ball-pos))))
+         (square (max (ball-r ball)
+                      (/ (funcall w obj) 2)))))))
+
 (let ((unit 2))
   (defun move-paddle-left (world)
     (let ((pos (position (world-paddle world))))
@@ -85,7 +103,23 @@
   (dolist (wall (world-walls world))
     (change-ball-direction-on-collision-against-wall world wall))
   (let ((ball (world-ball world)))
-    (move-by-velocity ball)))
+    (move-by-velocity ball)
+
+    (when (collide-p ball (world-paddle world)
+                     :w #'paddle-w
+                     :h #'paddle-h)
+      (change-ball-direction-on-collision world))
+
+    (let ((bricks (remove-if-not (lambda (brick)
+                                   (collide-p ball brick
+                                              :w #'brick-w
+                                              :h #'brick-h))
+                                 (world-bricks world))))
+      (when bricks
+        (change-ball-direction-on-collision world)
+        (dolist (brick bricks)
+          (setf (world-bricks world)
+                (remove brick (world-bricks world))))))))
 
 
 (defgeneric draw (object surface))
@@ -116,32 +150,34 @@
                     :surface surface
                     :color sdl:*white*)))
 
+
+(defun create-world ()
+  (make-world
+   :width 290
+   :height 480
+   :ball (make-instance 'world-ball
+                        :r 5
+                        :vx (* 3 (sin (/ pi 4)))
+                        :vy (* 3 (- (sin (/ pi 4))))
+                        :position (make-position :x 10 :y 420))
+   :paddle (make-instance 'world-paddle
+                          :w 30
+                          :h 5
+                          :position (make-position :x 10 :y 440))
+   :walls (list :left :right :top)
+   :bricks (loop for y = 20 then (+ y 20)
+                 while (< y 80)
+                 nconc
+                (loop for x = 10 then (+ x 40)
+                      while (< (+ x 30) 320)
+                      collect
+                     (make-instance 'world-brick
+                                    :w 30
+                                    :h 5
+                                    :position (make-position :x x :y y))))))
+
 (defun main ()
-  (let ((world (make-world
-                :width 290
-                :height 480
-                :ball (make-instance 'world-ball
-                       :r 5
-                       :vx (* 3 (sin (/ pi 4)))
-                       :vy (* 3 (- (sin (/ pi 4))))
-                       :position (make-position :x 10 :y 420))
-                :paddle (make-instance 'world-paddle
-                         :w 30
-                         :h 5
-                         :position (make-position :x 10 :y 440))
-                :walls (list :left :right :top)
-                :bricks (loop for y = 20 then (+ y 20)
-                              while (< y 80)
-                              nconc
-                              (loop for x = 10 then (+ x 40)
-                                    while (< (+ x 30) 320)
-                                    collect
-                                    (make-instance 'world-brick
-                                                   :w 30
-                                                   :h 5
-                                                   :position
-                                                   (make-position
-                                                    :x x :y y))))))
+  (let ((world (create-world))
         (playing-p t))
     (sdl:with-init ()
       (sdl:window (world-width world)
@@ -157,7 +193,14 @@
                  (move-paddle-left world))
                 ((sdl:key-down-p :sdl-key-right)
                  (move-paddle-right world)))
-          (cond (playing-p
+          (cond ((and playing-p
+                      (null (world-bricks world)))
+                 (sdl:clear-display sdl:*black*)
+                 (draw (world-paddle world) sdl:*default-display*)
+                 (sdl:draw-string-solid-* "Congratulations!"
+                                          10 10)
+                 (sdl:update-display))
+                (playing-p
                  (auto-update-world world)
                  (when (ball-out-of-world-p world)
                    (setf playing-p nil))
@@ -167,9 +210,14 @@
                  (dolist (brick (world-bricks world))
                    (draw brick sdl:*default-display*))
                  (sdl:update-display))
+                ((sdl:key-down-p :sdl-key-space)
+                 (setq world (create-world))
+                 (setq playing-p t))
                 (t
                  (sdl:clear-display sdl:*black*)
                  (draw (world-paddle world) sdl:*default-display*)
                  (sdl:draw-string-solid-* "Game Over!"
                                           10 10)
+                 (sdl:draw-string-solid-* "Press SPACE key..."
+                                          10 20)
                  (sdl:update-display))))))))
