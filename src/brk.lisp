@@ -24,19 +24,19 @@
 
 (defstruct position x y)
 
+(defstruct velocity x y)
+
 (defclass positionable ()
   ((position :initarg :position
              :accessor position)))
 
-(defclass velocity ()
-  ((x :initarg :vx
-      :accessor velocity-x)
-   (y :initarg :vy
-      :accessor velocity-y)))
+(defclass move-automatically ()
+  ((velocity :initarg :velocity
+             :accessor velocity)))
 
 (defclass world-paddle (paddle positionable) ())
 
-(defclass world-ball (ball positionable velocity) ())
+(defclass world-ball (ball positionable move-automatically) ())
 
 (defclass world-brick (brick positionable) ())
 
@@ -44,21 +44,22 @@
 
 (defun change-ball-direction-on-collision-against-wall (world wall)
   (let ((ball (world-ball world)))
-    (let ((pos (position ball)))
+    (let ((v (velocity ball))
+          (pos (position ball)))
       (ecase wall
         (:left
          (when (< (position-x pos) 0)
-           (setf (velocity-x ball) (- (velocity-x ball)))))
+           (setf (velocity-x v) (- (velocity-x v)))))
         (:right
          (when (< (world-width world) (position-x pos))
-           (setf (velocity-x ball) (- (velocity-x ball)))))
+           (setf (velocity-x v) (- (velocity-x v)))))
         (:top
          (when (< (position-y pos) 0)
-           (setf (velocity-y ball) (- (velocity-y ball)))))))))
+           (setf (velocity-y v) (- (velocity-y v)))))))))
 
 (defun change-ball-direction-on-collision (world)
-  (let ((ball (world-ball world)))
-    (setf (velocity-y ball) (- (velocity-y ball)))))
+  (let ((v (velocity (world-ball world))))
+    (setf (velocity-y v) (- (velocity-y v)))))
 
 (defun collide-p (ball obj &key w h)
   (labels ((square (x)
@@ -90,9 +91,10 @@
           (incf (position-x pos) unit)))))
 
   (defun move-by-velocity (positionable)
-    (let ((pos (position positionable)))
-      (incf (position-x pos) (* unit (velocity-x positionable)))
-      (incf (position-y pos) (* unit (velocity-y positionable))))))
+    (let ((v (velocity positionable))
+          (pos (position positionable)))
+      (incf (position-x pos) (* unit (velocity-x v)))
+      (incf (position-y pos) (* unit (velocity-y v))))))
 
 (defun ball-out-of-world-p (world)
   (let ((pos (position (world-ball world))))
@@ -157,9 +159,12 @@
    :height 480
    :ball (make-instance 'world-ball
                         :r 5
-                        :vx (* 3 (sin (/ pi 4)))
-                        :vy (* 3 (- (sin (/ pi 4))))
-                        :position (make-position :x 10 :y 420))
+                        :velocity
+                        (make-velocity
+                         :x (* 3 (sin (/ pi 4)))
+                         :y (* 3 (- (sin (/ pi 4)))))
+                        :position
+                        (make-position :x 10 :y 420))
    :paddle (make-instance 'world-paddle
                           :w 30
                           :h 5
@@ -177,6 +182,7 @@
                                     :position (make-position :x x :y y))))))
 
 (defun main ()
+  (sdl:initialise-default-font)
   (let ((world (create-world))
         (playing-p t))
     (sdl:with-init ()
