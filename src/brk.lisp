@@ -61,19 +61,47 @@
   (let ((v (velocity (world-ball world))))
     (setf (velocity-y v) (- (velocity-y v)))))
 
-(defun collide-p (ball obj &key w h)
+(defun ball-will-collide-p (ball obj &key w h)
+  #+nil
+  (let ((v1-x (velocity-x (velocity ball)))
+        (v1-y (velocity-y (velocity ball)))
+        (v2-x (funcall w obj))
+        (v2-y (funcall h obj))
+        (v-x (- (position-x (position obj))
+                (position-x (position ball))))
+        (v-y (- (position-y (position obj))
+                (position-y (position ball)))))
+    (let ((t1 (/ (- (* v-x v2-y) (* v-y v2-x))
+                 (- (* v1-x v2-y) (* v1-y v2-x))))
+          (t2 (/ (- (* v-x v1-y) (* v-y v1-x))
+                 (- (* v1-x v2-y) (* v1-y v2-x)))))
+      (and (<= 0 t1 1) (<= 0 t2 1))))
   (labels ((square (x)
              (* x x)))
-    (let ((ball-pos (position ball))
-          (obj-pos (position obj)))
-      (< (+ (square (- (+ (position-x obj-pos)
-                          (/ (funcall w obj) 2))
-                       (position-x ball-pos)))
-            (square (- (+ (position-y obj-pos)
-                          (/ (funcall h obj) 2))
-                       (position-y ball-pos))))
-         (square (max (ball-r ball)
-                      (/ (funcall w obj) 2)))))))
+    (let ((obj-center-pos-x (+ (position-x (position obj))
+                               (/ (funcall w obj) 2)))
+          (obj-center-pos-y (+ (position-y (position obj))
+                               (/ (funcall h obj) 2))))
+      (let ((ball-pos (position ball))
+            (ball-vel (velocity ball)))
+        (let ((squared-distance-before
+               (+ (square (- obj-center-pos-x
+                             (position-x ball-pos)))
+                  (square (- obj-center-pos-y
+                             (position-y ball-pos)))))
+              (squared-distance-after
+               (+ (square (- obj-center-pos-x
+                             (+ (position-x ball-pos)
+                                (velocity-x ball-vel))))
+                  (square (- obj-center-pos-y
+                             (+ (position-y ball-pos)
+                                (velocity-y ball-vel)))))))
+          (let ((getting-close-p
+                 (> squared-distance-before squared-distance-after)))
+            (and getting-close-p
+                 (< squared-distance-after
+                    (square (max (ball-r ball)
+                                 (/ (funcall w obj) 2)))))))))))
 
 (let ((unit 2))
   (defun move-paddle-left (world)
@@ -105,24 +133,26 @@
   (dolist (wall (world-walls world))
     (change-ball-direction-on-collision-against-wall world wall))
   (let ((ball (world-ball world)))
-    (move-by-velocity ball)
-
-    (when (collide-p ball (world-paddle world)
-                     :w #'paddle-w
-                     :h #'paddle-h)
-      (change-ball-direction-on-collision world))
-
-    (let ((bricks (remove-if-not (lambda (brick)
-                                   (collide-p ball brick
+    (if (ball-will-collide-p ball (world-paddle world)
+                             :w #'paddle-w
+                             :h #'paddle-h)
+        (progn
+          (change-ball-direction-on-collision world)
+          (move-by-velocity ball))
+        (let ((bricks (remove-if-not
+                       (lambda (brick)
+                         (ball-will-collide-p ball brick
                                               :w #'brick-w
                                               :h #'brick-h))
-                                 (world-bricks world))))
-      (when bricks
-        (change-ball-direction-on-collision world)
-        (dolist (brick bricks)
-          (setf (world-bricks world)
-                (remove brick (world-bricks world))))))))
-
+                       (world-bricks world))))
+          (if bricks
+              (progn
+                (dolist (brick bricks)
+                  (setf (world-bricks world)
+                        (remove brick (world-bricks world))))
+                (change-ball-direction-on-collision world)
+                (move-by-velocity ball))
+              (move-by-velocity ball))))))
 
 (defgeneric draw (object surface))
 
@@ -166,7 +196,7 @@
                         :position
                         (make-position :x 10 :y 420))
    :paddle (make-instance 'world-paddle
-                          :w 30
+                          :w 50
                           :h 5
                           :position (make-position :x 10 :y 440))
    :walls (list :left :right :top)
@@ -203,8 +233,7 @@
                       (null (world-bricks world)))
                  (sdl:clear-display sdl:*black*)
                  (draw (world-paddle world) sdl:*default-display*)
-                 (sdl:draw-string-solid-* "Congratulations!"
-                                          10 10)
+                 (sdl:draw-string-solid-* "Congratulations!" 10 10)
                  (sdl:update-display))
                 (playing-p
                  (auto-update-world world)
@@ -222,8 +251,6 @@
                 (t
                  (sdl:clear-display sdl:*black*)
                  (draw (world-paddle world) sdl:*default-display*)
-                 (sdl:draw-string-solid-* "Game Over!"
-                                          10 10)
-                 (sdl:draw-string-solid-* "Press SPACE key..."
-                                          10 20)
+                 (sdl:draw-string-solid-* "Game Over!" 10 10)
+                 (sdl:draw-string-solid-* "Press SPACE key..." 10 20)
                  (sdl:update-display))))))))
