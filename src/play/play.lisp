@@ -5,7 +5,7 @@
 
 (defun main ()
   (sdl:initialise-default-font)
-  (let ((scene (make-instance 'brk.play.scenes:playing-scene)))
+  (let ((scene (make-instance 'brk.play.scenes:title-scene)))
     (sdl:with-init ()
       (sdl:window 290 480 :title-caption "BRK")
       (setf (sdl:frame-rate) 60)
@@ -13,6 +13,9 @@
         (:quit-event () t)
         (:video-expose-event ()
           (sdl:update-display))
+        (:key-down-event (:key key)
+          (cond ((sdl:key= key :sdl-key-escape)
+                 (sdl:push-quit-event))))
         (:idle ()
           (let ((new-scene (brk.play.scenes:handle-idle scene)))
             (setq scene new-scene)))))))
