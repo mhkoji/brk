@@ -26,20 +26,22 @@
 
 (defstruct velocity x y)
 
-(defclass positionable ()
-  ((position :initarg :position
-             :accessor position)))
+(defclass emplaced ()
+  ((position
+    :initarg :position
+    :accessor position)))
 
-(defclass move-automatically ()
-  ((velocity :initarg :velocity
-             :accessor velocity)))
+(defclass inertial ()
+  ((velocity
+    :initarg :velocity
+    :accessor velocity)))
 
 
-(defclass paddle (brk:paddle positionable) ())
+(defclass paddle (brk:paddle emplaced) ())
 
-(defclass ball (brk:ball positionable move-automatically) ())
+(defclass ball (brk:ball emplaced inertial) ())
 
-(defclass brick (brk:brick positionable) ())
+(defclass brick (brk:brick emplaced) ())
 
 
 (defstruct world width height paddle ball walls bricks)
@@ -113,9 +115,9 @@
                  (world-width world))
           (incf (position-x pos) unit))))))
 
-(defun move-by-velocity (positionable)
-  (let ((v (velocity positionable))
-        (pos (position positionable)))
+(defun move-by-velocity (emplaced)
+  (let ((v (velocity emplaced))
+        (pos (position emplaced)))
     (incf (position-x pos) (velocity-x v))
     (incf (position-y pos) (velocity-y v))))
 
