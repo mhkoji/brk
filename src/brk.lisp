@@ -7,7 +7,11 @@
            :ball-r
            :brick
            :brick-w
-           :brick-h))
+           :brick-h
+           :get-position
+           :set-position
+           :get-velocity
+           :set-velocity))
 (in-package :brk)
 
 (defclass paddle ()
@@ -26,3 +30,12 @@
    (h :initarg :h
       :reader brick-h)))
 
+
+(defgeneric get-position (entity))
+
+(defgeneric set-position (entity pos))
+
+
+(defgeneric get-velocity (entity))
+
+(defgeneric set-velocity (entity v))

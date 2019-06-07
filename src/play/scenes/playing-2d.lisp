@@ -1,79 +1,133 @@
 (defpackage :brk.play.scenes.playing-2d
   (:use :cl)
-  (:export :create-world
-           :draw-world
-           :draw-paddle
-           :move-ball
-           :move-paddle)
+  (:export :scene
+           :scene-states
+           :scene-world
+           :create-world
+           :create-initial-state
+           :state-paddle-position
+           :state-ball-position
+           :state-ball-velocity
+           :state-bricks
+           :update-scene)
   (:import-from :brk.2d
                 :move-ball))
 (in-package :brk.play.scenes.playing-2d)
 
-(defun draw-ball (ball surface)
-  (let ((pos (brk.2d:position ball)))
-    (sdl:draw-filled-circle-* (ceiling (brk.2d:position-x pos))
-                              (ceiling (brk.2d:position-y pos))
-                              (brk:ball-r ball)
-                              :surface surface
-                              :color sdl:*white*)))
+(defclass scene ()
+  ((world
+    :accessor scene-world)
+   (states
+    :initform nil
+    :initarg :states
+    :accessor scene-states)
+   (updates
+    :initform nil
+    :accessor scene-updates)))
 
-(defun draw-paddle (paddle surface)
-  (let ((pos (brk.2d:position paddle)))
-    (sdl:draw-box-* (brk.2d:position-x pos)
-                    (brk.2d:position-y pos)
-                    (brk:paddle-w paddle)
-                    (brk:paddle-h paddle)
-                    :surface surface
-                    :color sdl:*white*)))
+(defclass scene-ref ()
+  ((scene
+    :initarg :scene
+    :reader scene)))
 
-(defun draw-brick (brick surface)
-  (let ((pos (brk.2d:position brick)))
-    (sdl:draw-box-* (brk.2d:position-x pos)
-                    (brk.2d:position-y pos)
-                    (brk:brick-w brick)
-                    (brk:brick-h brick)
-                    :surface surface
-                    :color sdl:*white*)))
+(defstruct state
+  paddle-position
+  ball-position
+  ball-velocity
+  bricks)
+
+(defclass paddle (brk:paddle scene-ref) ())
+
+(defclass ball (brk:ball scene-ref) ())
+
+(defclass brick (brk:brick)
+  ((position
+    :initarg :position
+    :reader brick-position)))
+
+(defun scene-last-state (scene)
+  (car (scene-states scene)))
+
+(defmethod brk:get-position ((paddle paddle))
+  (state-paddle-position (scene-last-state (scene paddle))))
+
+(defmethod brk:set-position ((paddle paddle) pos)
+  (push (lambda (state)
+          (setf (state-paddle-position state) pos))
+        (scene-updates (scene paddle))))
 
 
-(defun create-world ()
-  (brk.2d:make-world
+(defmethod brk:get-position ((ball ball))
+  (state-ball-position (scene-last-state (scene ball))))
+
+(defmethod brk:set-position ((ball ball) pos)
+  (push (lambda (state)
+          (setf (state-ball-position state) pos))
+        (scene-updates (scene ball))))
+
+(defmethod brk:get-velocity ((ball ball))
+  (state-ball-velocity (scene-last-state (scene ball))))
+
+(defmethod brk:set-velocity ((ball ball) v)
+  (push (lambda (state)
+          (setf (state-ball-velocity state) v))
+        (scene-updates (scene ball))))
+
+
+(defmethod brk:get-position ((brick brick))
+  (brick-position brick))
+
+
+(defclass world (brk.2d:world scene-ref) ())
+
+(defmethod brk.2d:world-bricks ((world world))
+  (state-bricks (scene-last-state (scene world))))
+
+(defmethod brk.2d:set-world-bricks ((world world) (bricks list))
+  (push (lambda (state)
+          (setf (state-bricks state) bricks))
+        (scene-updates (scene world))))
+
+(defun apply-updates! (scene)
+  (let ((state (copy-state (scene-last-state scene))))
+    (dolist (fn (scene-updates scene))
+      (funcall fn state))
+    (push state (scene-states scene))
+    (setf (scene-updates scene) nil)))
+
+(defun update-scene (scene &key paddle-direction)
+  (let ((world (scene-world scene)))
+    (case paddle-direction
+      (:left
+       (brk.2d:move-paddle-left world))
+      (:right
+       (brk.2d:move-paddle-right world)))
+    (brk.2d:move-ball world))
+  (apply-updates! scene))
+
+(defun create-world (scene)
+  (make-instance 'world
    :width 290
    :height 480
-   :ball (make-instance 'brk.2d:ball
-                        :r 5
-                        :velocity
-                        (brk.2d:make-velocity
-                         :x (* 6 (sin (/ pi 4)))
+   :ball (make-instance 'ball :r 5 :scene scene)
+   :paddle (make-instance 'paddle :w 30 :h 5 :scene scene)
+   :scene scene))
+
+(defun create-initial-state ()
+  (make-state
+   :ball-position
+   (brk.2d:make-position :x 10 :y 420)
+   :ball-velocity
+   (brk.2d:make-velocity :x (* 6 (sin (/ pi 4)))
                          :y (* 6 (- (sin (/ pi 4)))))
-                        :position
-                        (brk.2d:make-position :x 10 :y 420))
-   :paddle (make-instance 'brk.2d:paddle
-                          :w 30
-                          :h 5
-                          :position
-                          (brk.2d:make-position :x 10 :y 440))
-   :walls (list :left :right :top)
-   :bricks (loop for y = 20 then (+ y 20)
-                 while (< y 80)
-                 nconc
-                (loop for x = 10 then (+ x 40)
-                      while (< (+ x 30) 320)
-                      collect
-                     (make-instance 'brk.2d:brick
-                      :w 30
-                      :h 5
-                      :position
-                      (brk.2d:make-position :x x :y y))))))
-
-(defun move-paddle (world)
-  (cond ((sdl:key-down-p :sdl-key-left)
-         (brk.2d:move-paddle-left world))
-        ((sdl:key-down-p :sdl-key-right)
-         (brk.2d:move-paddle-right world))))
-
-(defun draw-world (world surface)
-  (draw-ball (brk.2d:world-ball world) surface)
-  (draw-paddle (brk.2d:world-paddle world) surface)
-  (dolist (brick (brk.2d:world-bricks world))
-    (draw-brick brick surface)))
+   :paddle-position
+   (brk.2d:make-position :x 10 :y 440)
+   :bricks
+   (loop for y = 20 then (+ y 20)
+         while (< y 80)
+         nconc
+           (loop for x = 10 then (+ x 40)
+                 while (< (+ x 30) 320)
+                 collect
+                   (let ((pos (brk.2d:make-position :x x :y y)))
+                     (make-instance 'brick :w 30 :h 5 :position pos))))))

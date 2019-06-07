@@ -1,65 +1,84 @@
 (defpackage :brk.2d
   (:use :cl)
   (:shadow :position)
-  (:export :make-world
+  (:export :world
+           :world-width
+           :world-height
+           :world-paddle
+           :world-ball
+           :world-walls
+           :world-bricks
+           :set-world-bricks
            :make-velocity
            :make-position
            :position
            :position-x
            :position-y
            :ball-out-of-world-p
-           :paddle
-           :ball
-           :brick
            :move-ball
            :move-paddle-left
-           :move-paddle-right
-           :make-world
-           :world-width
-           :world-height
-           :world-ball
-           :world-paddle
-           :world-bricks))
+           :move-paddle-right))
 (in-package :brk.2d)
+
+(defclass world ()
+  ((width
+    :initarg :width
+    :reader world-width)
+   (height
+    :initarg :height
+    :reader world-height)
+   (paddle
+    :initarg :paddle
+    :reader world-paddle)
+   (ball
+    :initarg :ball
+    :reader world-ball)
+   (walls
+    :initform (list :left :right :top)
+    :reader world-walls)))
+
+(defgeneric world-bricks (world))
+
+(defgeneric set-world-bricks (world bricks))
 
 (defstruct position x y)
 
 (defstruct velocity x y)
 
-(defclass emplaced ()
-  ((position
-    :initarg :position
-    :accessor position)))
 
-(defclass inertial ()
-  ((velocity
-    :initarg :velocity
-    :accessor velocity)))
+(let ((unit 2))
+  (defun move-paddle-left (world)
+    (let ((paddle (world-paddle world)))
+      (let ((pos (brk:get-position paddle)))
+        (when (< 0 (position-x pos))
+          (let ((new-pos (make-position :x (+ (position-x pos) (- unit))
+                                        :y (position-y pos))))
+            (brk:set-position paddle new-pos))))))
 
+  (defun move-paddle-right (world)
+    (let ((paddle (world-paddle world)))
+      (let ((pos (brk:get-position paddle)))
+        (when (< (+ (position-x pos) (brk:paddle-w paddle) unit)
+                 (world-width world))
+          (let ((new-pos (make-position :x (+ (position-x pos) unit)
+                                        :y (position-y pos))))
+            (brk:set-position paddle new-pos)))))))
 
-(defclass paddle (brk:paddle emplaced) ())
-
-(defclass ball (brk:ball emplaced inertial) ())
-
-(defclass brick (brk:brick emplaced) ())
-
-
-(defstruct world width height paddle ball walls bricks)
 
 (defun ball-out-of-world-p (world)
-  (let ((pos (position (world-ball world))))
+  (let ((pos (brk:get-position (world-ball world))))
     (< (world-height world) (position-y pos))))
 
 (defun ball-will-collide-p (ball obj &key w h)
   (labels ((square (x) (* x x)))
-    (let ((v1-x (velocity-x (velocity ball)))
-          (v1-y (velocity-y (velocity ball)))
+    (let ((v1-x (velocity-x (brk:get-velocity ball)))
+          (v1-y (velocity-y (brk:get-velocity ball)))
           (v2-x (funcall w obj))
           (v2-y (funcall h obj))
-          (v-x (- (position-x (position obj))
-                  (position-x (position ball))))
-          (v-y (- (position-y (position obj))
-                  (position-y (position ball)))))
+          (v-x (- (position-x (brk:get-position obj))
+                  (position-x (brk:get-position ball))))
+          (v-y (- (position-y (brk:get-position obj))
+                  (position-y (brk:get-position ball)))))
       (let ((t1 (/ (- (* v-x v2-y) (* v-y v2-x))
                    (- (* v1-x v2-y) (* v1-y v2-x))))
             (t2 (/ (- (* v-x v1-y) (* v-y v1-x))
@@ -75,12 +94,12 @@
                         (square (brk:ball-r ball))))
                    (t t)))))
     #+nil
-    (let ((obj-center-pos-x (+ (position-x (position obj))
+    (let ((obj-center-pos-x (+ (position-x (brk:get-position obj))
                                (/ (funcall w obj) 2)))
-          (obj-center-pos-y (+ (position-y (position obj))
+          (obj-center-pos-y (+ (position-y (brk:get-position obj))
                                (/ (funcall h obj) 2))))
-      (let ((ball-pos (position ball))
-            (ball-vel (velocity ball)))
+      (let ((ball-pos (brk:get-position ball))
+            (ball-vel (brk:get-velocity ball)))
         (let ((squared-distance-before
                (+ (square (- obj-center-pos-x
                              (position-x ball-pos)))
@@ -100,73 +119,67 @@
                     (square (max (brk:ball-r ball)
                                  (/ (funcall w obj) 2)))))))))))
 
-(let ((unit 2))
-  (defun move-paddle-left (world)
-    (let ((pos (position (world-paddle world))))
-      (when (< 0 (position-x pos))
-        (incf (position-x pos) (- unit)))))
-
-  (defun move-paddle-right (world)
-    (let ((paddle (world-paddle world)))
-      (let ((pos (position paddle)))
-        (when (< (+ (position-x pos)
-                    (brk:paddle-w paddle)
-                    unit)
-                 (world-width world))
-          (incf (position-x pos) unit))))))
-
-(defun move-by-velocity (emplaced)
-  (let ((v (velocity emplaced))
-        (pos (position emplaced)))
-    (incf (position-x pos) (velocity-x v))
-    (incf (position-y pos) (velocity-y v))))
+(defun move-by-velocity (ball &optional new-v)
+  (let ((pos (brk:get-position ball))
+        (v (or new-v (brk:get-velocity ball))))
+    (let ((new-pos (make-position
+                    :x (+ (position-x pos) (velocity-x v))
+                    :y (+ (position-y pos) (velocity-y v)))))
+      (brk:set-position ball new-pos)
+      (when new-v
+        (brk:set-velocity ball new-v)))))
 
 (defun change-ball-direction-on-collision-against-wall (world wall)
   (let ((ball (world-ball world)))
-    (let ((v (velocity ball))
-          (pos (position ball)))
+    (let ((v (brk:get-velocity ball))
+          (pos (brk:get-position ball)))
       (ecase wall
         (:left
          (when (< (position-x pos) 0)
-           (setf (velocity-x v) (- (velocity-x v)))
+           (move-by-velocity ball (make-velocity
+                                   :x (- (velocity-x v))
+                                   :y (velocity-y v)))
            t))
         (:right
          (when (< (world-width world) (position-x pos))
-           (setf (velocity-x v) (- (velocity-x v)))
+           (move-by-velocity ball (make-velocity
+                                   :x (- (velocity-x v))
+                                   :y (velocity-y v)))
            t))
         (:top
          (when (< (position-y pos) 0)
-           (setf (velocity-y v) (- (velocity-y v)))
+           (move-by-velocity ball (make-velocity
+                                   :x (velocity-x v)
+                                   :y (- (velocity-y v))))
            t))))))
 
-(defun change-ball-direction-on-collision (world)
-  (let ((v (velocity (world-ball world))))
-    (setf (velocity-y v) (- (velocity-y v)))))
+(defun change-ball-direction-on-collision (ball)
+  (let ((v (brk:get-velocity ball)))
+    (move-by-velocity ball (make-velocity
+                            :x (velocity-x v)
+                            :y (- (velocity-y v))))))
 
 (defun move-ball (world)
   (let ((ball (world-ball world)))
-    (cond ((some (lambda (w)
-                   (change-ball-direction-on-collision-against-wall
-                    world w))
-                 (world-walls world))
-           (move-by-velocity ball))
-          ((ball-will-collide-p ball (world-paddle world)
-                                :w #'brk:paddle-w
-                                :h #'brk:paddle-h)
-           (change-ball-direction-on-collision world)
-           (move-by-velocity ball))
-          (t
-           (let ((bricks (remove-if-not
-                          (lambda (brick)
-                            (ball-will-collide-p ball brick
-                                                 :w #'brk:brick-w
-                                                 :h #'brk:brick-h))
-                          (world-bricks world))))
-             (if bricks
-                 (progn
-                   (setf (world-bricks world)
-                         (remove-if (lambda (b) (find b bricks))
-                                    (world-bricks world)))
-                   (change-ball-direction-on-collision world)
-                   (move-by-velocity ball))
-                 (move-by-velocity ball)))))))
+    (or (some (lambda (w)
+                (change-ball-direction-on-collision-against-wall
+                 world w))
+              (world-walls world))
+        (cond ((ball-will-collide-p ball (world-paddle world)
+                                    :w #'brk:paddle-w
+                                    :h #'brk:paddle-h)
+               (change-ball-direction-on-collision ball))
+              (t
+               (let ((bricks (remove-if-not
+                              (lambda (brick)
+                                (ball-will-collide-p ball brick
+                                                     :w #'brk:brick-w
+                                                     :h #'brk:brick-h))
+                              (world-bricks world))))
+                 (if bricks
+                     (let ((new-bricks (remove-if (lambda (b)
+                                                    (find b bricks))
+                                                  (world-bricks world))))
+                       (set-world-bricks world new-bricks)
+                       (change-ball-direction-on-collision ball))
+                     (move-by-velocity ball))))))))

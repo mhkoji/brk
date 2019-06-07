@@ -18,4 +18,5 @@
                  (sdl:push-quit-event))))
         (:idle ()
           (let ((new-scene (brk.play.scenes:handle-idle scene)))
-            (setq scene new-scene)))))))
+            (setq scene new-scene)))))
+    scene))
