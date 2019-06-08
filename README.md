@@ -5,5 +5,5 @@ A game written in Common Lisp
 
 ```
 CL-USER> (ql:quickload :brk)
-CL-USER> (brk.play:main)
+CL-USER> (brk.sdl:main)
 ```
