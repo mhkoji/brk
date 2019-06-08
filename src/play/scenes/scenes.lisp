@@ -92,9 +92,11 @@
 
 (defun get-non-playing-world! (playing-scene)
   (let ((world (brk.play.scenes.playing-2d:scene-world playing-scene)))
-    (let ((paddle (brk.2d:world-paddle world)))
+    (let ((ball (brk.2d:world-ball world))
+          (paddle (brk.2d:world-paddle world)))
       (change-class world 'world
-                    :ball nil
+                    :ball (change-class ball 'ball
+                           :position (brk.2d:get-position ball))
                     :paddle (change-class paddle 'paddle
                              :position (brk.2d:get-position paddle))))))
 
@@ -129,6 +131,14 @@
 
 (defmethod brk.2d:set-position ((paddle paddle) pos)
   (setf (paddle-position paddle) pos))
+
+(defclass ball (brk.2d:ball)
+  ((position
+    :initarg :position
+    :accessor ball-position)))
+
+(defmethod brk.2d:get-position ((ball ball))
+  (ball-position ball))
 
 (defclass world (brk.2d:world)
   ((bricks
