@@ -44,28 +44,28 @@
 ;;;
 
 (defun draw-ball (ball surface)
-  (let ((pos (brk:get-position ball)))
+  (let ((pos (brk.2d:get-position ball)))
     (sdl:draw-filled-circle-* (ceiling (brk.2d:position-x pos))
                               (ceiling (brk.2d:position-y pos))
-                              (brk:ball-r ball)
+                              (brk.2d:ball-r ball)
                               :surface surface
                               :color sdl:*white*)))
 
 (defun draw-paddle (paddle surface)
-  (let ((pos (brk:get-position paddle)))
+  (let ((pos (brk.2d:get-position paddle)))
     (sdl:draw-box-* (brk.2d:position-x pos)
                     (brk.2d:position-y pos)
-                    (brk:paddle-w paddle)
-                    (brk:paddle-h paddle)
+                    (brk.2d:paddle-w paddle)
+                    (brk.2d:paddle-h paddle)
                     :surface surface
                     :color sdl:*white*)))
 
 (defun draw-brick (brick surface)
-  (let ((pos (brk:get-position brick)))
+  (let ((pos (brk.2d:get-position brick)))
     (sdl:draw-box-* (brk.2d:position-x pos)
                     (brk.2d:position-y pos)
-                    (brk:brick-w brick)
-                    (brk:brick-h brick)
+                    (brk.2d:brick-w brick)
+                    (brk.2d:brick-h brick)
                     :surface surface
                     :color sdl:*white*)))
 
@@ -75,58 +75,59 @@
   (dolist (brick (brk.2d:world-bricks world))
     (draw-brick brick surface)))
 
-
-(defun paddle-direction ()
+(defun move-paddle (world)
   (cond ((sdl:key-down-p :sdl-key-left)
-         :left)
+         (brk.2d:move-paddle-left world))
         ((sdl:key-down-p :sdl-key-right)
-         :right)))
+         (brk.2d:move-paddle-right world))))
 
-(defclass playing-scene (brk.play.scenes.playing-2d:scene) ())
+(defclass playing-scene (brk.play.scenes.playing-2d:recorded-scene) ())
 
 (defmethod initialize-instance :after ((scene playing-scene) &key)
-  (with-accessors ((world brk.play.scenes.playing-2d:scene-world)
-                   (states brk.play.scenes.playing-2d:scene-states)) scene
+  (with-accessors
+        ((world brk.play.scenes.playing-2d:scene-world)
+         (states brk.play.scenes.playing-2d:recorded-scene-states)) scene
     (setf world (brk.play.scenes.playing-2d:create-world scene))
     (setf states (list (brk.play.scenes.playing-2d:create-initial-state)))))
 
-(defun non-playing-world (playing-scene)
+(defun get-non-playing-world! (playing-scene)
   (let ((world (brk.play.scenes.playing-2d:scene-world playing-scene)))
     (let ((paddle (brk.2d:world-paddle world)))
-      (make-instance 'world
-                     :width (brk.2d:world-width world)
-                     :height (brk.2d:world-height world)
-                     :paddle (change-class paddle 'paddle
-                              :position (brk:get-position paddle))
-                     :ball nil))))
+      (change-class world 'world
+                    :ball nil
+                    :paddle (change-class paddle 'paddle
+                             :position (brk.2d:get-position paddle))))))
 
 (defmethod handle-idle ((scene playing-scene))
-  (brk.play.scenes.playing-2d:update-scene
-   scene
-   :paddle-direction (paddle-direction))
+  (brk.play.scenes.playing-2d:call-with-update-world scene
+    (lambda (world)
+      (move-paddle world)
+      (brk.2d:move-ball world)))
   (let ((world (brk.play.scenes.playing-2d:scene-world scene)))
     (clear-display)
     (draw-world world sdl:*default-display*)
     (sdl:update-display)
     (cond ((null (brk.2d:world-bricks world))
            (make-instance 'finished-scene
-                          :world (non-playing-world scene)))
+                          :world (get-non-playing-world! scene)))
           ((brk.2d:ball-out-of-world-p world)
-           (let ((states (brk.play.scenes.playing-2d:scene-states scene)))
-             (make-instance 'replaying-scene :states (reverse states))))
+           (let ((states (brk.play.scenes.playing-2d:recorded-scene-states
+                          scene)))
+             (make-instance 'playing-back-scene :states (reverse states))))
           (t
            scene))))
 
+;;;
 
-(defclass paddle (brk:paddle)
+(defclass paddle (brk.2d:paddle)
   ((position
     :initarg :position
     :accessor paddle-position)))
 
-(defmethod brk:get-position ((paddle paddle))
+(defmethod brk.2d:get-position ((paddle paddle))
   (paddle-position paddle))
 
-(defmethod brk:set-position ((paddle paddle) pos)
+(defmethod brk.2d:set-position ((paddle paddle) pos)
   (setf (paddle-position paddle) pos))
 
 (defclass world (brk.2d:world)
@@ -135,15 +136,6 @@
     :initform nil
     :reader brk.2d:world-bricks)))
 
-;;;
-
-(defun move-paddle (world &key paddle-direction)
-  (case paddle-direction
-    (:left
-     (brk.2d:move-paddle-left world))
-    (:right
-     (brk.2d:move-paddle-right world))))
-
 (defclass game-over-scene ()
   ((world
     :initarg :world
@@ -151,7 +143,7 @@
 
 (defmethod handle-idle ((scene game-over-scene))
   (with-accessors ((world game-over-scene-world)) scene
-    (move-paddle world :paddle-direction (paddle-direction))
+    (move-paddle world)
     (clear-display)
     (draw-paddle (brk.2d:world-paddle world) sdl:*default-display*)
     (sdl:draw-string-solid-* "Game Over!" 10 10)
@@ -172,7 +164,7 @@
 
 (defmethod handle-idle ((scene finished-scene))
   (with-accessors ((world finished-scene-world)) scene
-    (move-paddle world :paddle-direction (paddle-direction))
+    (move-paddle world)
     (clear-display)
     (draw-paddle (brk.2d:world-paddle world) sdl:*default-display*)
     (sdl:draw-string-solid-* "Congratulations!" 10 10)
@@ -181,26 +173,27 @@
 
 ;;;
 
-(defclass replaying-scene (brk.play.scenes.playing-2d:scene) ())
+(defclass playing-back-scene
+    (brk.play.scenes.playing-2d:playing-back-scene) ())
 
-(defmethod initialize-instance :after ((scene replaying-scene) &key)
+(defmethod initialize-instance :after ((scene playing-back-scene) &key)
   (with-accessors ((world brk.play.scenes.playing-2d:scene-world)) scene
     (setf world (brk.play.scenes.playing-2d:create-world scene))))
 
-(defmethod handle-idle ((scene replaying-scene))
+(defmethod handle-idle ((scene playing-back-scene))
   (let ((world (brk.play.scenes.playing-2d:scene-world scene)))
     (clear-display)
-    (sdl:draw-string-solid-* "Replaying" 5 5)
+    (sdl:draw-string-solid-* "Playing back" 5 5)
     (draw-world world sdl:*default-display*)
     (sdl:update-display))
-  (cond ((and (sdl:key-down-p :sdl-key-right)
-              (null (cdr (brk.play.scenes.playing-2d:scene-states scene))))
-         (make-instance 'game-over-scene
-                        :world (non-playing-world scene)))
-        ((sdl:key-down-p :sdl-key-right)
-         (setf (brk.play.scenes.playing-2d:scene-states scene)
-               (cdr (brk.play.scenes.playing-2d:scene-states scene)))
-         scene)
-        (t
-         scene)))
-
+  (let ((diff (cond ((sdl:key-down-p :sdl-key-down) +1)
+                    ((sdl:key-down-p :sdl-key-up)   -1))))
+    (when diff
+      (when (eql
+             (brk.play.scenes.playing-2d:playing-back-scene-increment-idnex!
+              scene diff)
+             :eof)
+        (return-from handle-idle
+          (make-instance 'game-over-scene
+                         :world (get-non-playing-world! scene))))))
+  scene)

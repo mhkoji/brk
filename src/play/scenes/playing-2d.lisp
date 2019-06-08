@@ -1,7 +1,6 @@
 (defpackage :brk.play.scenes.playing-2d
   (:use :cl)
   (:export :scene
-           :scene-states
            :scene-world
            :create-world
            :create-initial-state
@@ -9,21 +8,20 @@
            :state-ball-position
            :state-ball-velocity
            :state-bricks
-           :update-scene)
-  (:import-from :brk.2d
-                :move-ball))
+
+           :recorded-scene
+           :recorded-scene-states
+           :call-with-update-world
+
+           :playing-back-scene
+           :playing-back-scene-increment-idnex!))
 (in-package :brk.play.scenes.playing-2d)
 
 (defclass scene ()
   ((world
-    :accessor scene-world)
-   (states
-    :initform nil
-    :initarg :states
-    :accessor scene-states)
-   (updates
-    :initform nil
-    :accessor scene-updates)))
+    :accessor scene-world)))
+
+(defgeneric scene-current-state (scene))
 
 (defclass scene-ref ()
   ((scene
@@ -36,74 +34,14 @@
   ball-velocity
   bricks)
 
-(defclass paddle (brk:paddle scene-ref) ())
+(defclass paddle (brk.2d:paddle scene-ref) ())
 
-(defclass ball (brk:ball scene-ref) ())
+(defclass ball (brk.2d:ball scene-ref) ())
 
-(defclass brick (brk:brick)
+(defclass brick (brk.2d:brick)
   ((position
     :initarg :position
     :reader brick-position)))
-
-(defun scene-last-state (scene)
-  (car (scene-states scene)))
-
-(defmethod brk:get-position ((paddle paddle))
-  (state-paddle-position (scene-last-state (scene paddle))))
-
-(defmethod brk:set-position ((paddle paddle) pos)
-  (push (lambda (state)
-          (setf (state-paddle-position state) pos))
-        (scene-updates (scene paddle))))
-
-
-(defmethod brk:get-position ((ball ball))
-  (state-ball-position (scene-last-state (scene ball))))
-
-(defmethod brk:set-position ((ball ball) pos)
-  (push (lambda (state)
-          (setf (state-ball-position state) pos))
-        (scene-updates (scene ball))))
-
-(defmethod brk:get-velocity ((ball ball))
-  (state-ball-velocity (scene-last-state (scene ball))))
-
-(defmethod brk:set-velocity ((ball ball) v)
-  (push (lambda (state)
-          (setf (state-ball-velocity state) v))
-        (scene-updates (scene ball))))
-
-
-(defmethod brk:get-position ((brick brick))
-  (brick-position brick))
-
-
-(defclass world (brk.2d:world scene-ref) ())
-
-(defmethod brk.2d:world-bricks ((world world))
-  (state-bricks (scene-last-state (scene world))))
-
-(defmethod brk.2d:set-world-bricks ((world world) (bricks list))
-  (push (lambda (state)
-          (setf (state-bricks state) bricks))
-        (scene-updates (scene world))))
-
-(defun apply-updates! (scene)
-  (let ((state (copy-state (scene-last-state scene))))
-    (dolist (fn (scene-updates scene))
-      (funcall fn state))
-    (push state (scene-states scene))
-    (setf (scene-updates scene) nil)))
-
-(defun update-scene (scene &key paddle-direction)
-  (let ((world (scene-world scene)))
-    (case paddle-direction
-      (:left
-       (brk.2d:move-paddle-left world))
-      (:right
-       (brk.2d:move-paddle-right world)))
-    (brk.2d:move-ball world))
-  (apply-updates! scene))
 
 (defun create-world (scene)
   (make-instance 'world
@@ -131,3 +69,85 @@
                  collect
                    (let ((pos (brk.2d:make-position :x x :y y)))
                      (make-instance 'brick :w 30 :h 5 :position pos))))))
+
+
+(defclass recorded-scene (scene)
+  ((states
+    :initform nil
+    :initarg :states
+    :accessor recorded-scene-states)
+   (updates
+    :initform nil
+    :accessor recorded-scene-updates)))
+
+(defmethod scene-current-state ((scene recorded-scene))
+  (car (recorded-scene-states scene)))
+
+(defmethod brk.2d:get-position ((paddle paddle))
+  (state-paddle-position (scene-current-state (scene paddle))))
+
+(defmethod brk.2d:get-position ((ball ball))
+  (state-ball-position (scene-current-state (scene ball))))
+
+(defmethod brk.2d:get-velocity ((ball ball))
+  (state-ball-velocity (scene-current-state (scene ball))))
+
+(defmethod brk.2d:get-position ((brick brick))
+  (brick-position brick))
+
+(defclass world (brk.2d:world scene-ref) ())
+
+(defmethod brk.2d:world-bricks ((world world))
+  (state-bricks (scene-current-state (scene world))))
+
+
+(defmethod brk.2d:set-position ((paddle paddle) pos)
+  (push (lambda (state)
+          (setf (state-paddle-position state) pos))
+        (recorded-scene-updates (scene paddle))))
+
+(defmethod brk.2d:set-position ((ball ball) pos)
+  (push (lambda (state)
+          (setf (state-ball-position state) pos))
+        (recorded-scene-updates (scene ball))))
+
+(defmethod brk.2d:set-velocity ((ball ball) v)
+  (push (lambda (state)
+          (setf (state-ball-velocity state) v))
+        (recorded-scene-updates (scene ball))))
+
+(defmethod brk.2d:set-world-bricks ((world world) (bricks list))
+  (push (lambda (state)
+          (setf (state-bricks state) bricks))
+        (recorded-scene-updates (scene world))))
+
+(defun apply-updates! (recorded-scene)
+  (let ((state (copy-state (scene-current-state recorded-scene))))
+    (dolist (fn (recorded-scene-updates recorded-scene))
+      (funcall fn state))
+    (push state (recorded-scene-states recorded-scene))
+    (setf (recorded-scene-updates recorded-scene) nil)))
+
+(defun call-with-update-world (recorded-scene fn)
+  (funcall fn (scene-world recorded-scene))
+  (apply-updates! recorded-scene))
+
+
+(defclass playing-back-scene (scene)
+  ((states
+    :initarg :states
+    :accessor playing-back-scene-states)
+   (index
+    :initform 0
+    :accessor playing-back-scene-index)))
+
+(defmethod scene-current-state ((scene playing-back-scene))
+  (nth (playing-back-scene-index scene) (playing-back-scene-states scene)))
+
+(defun playing-back-scene-increment-idnex! (playing-back-scene diff)
+  (let ((new-index (+ (playing-back-scene-index playing-back-scene) diff)))
+    (when (<= 0 new-index)
+      (if (< new-index
+             (length (playing-back-scene-states playing-back-scene)))
+          (setf (playing-back-scene-index playing-back-scene) new-index)
+          :eof))))
