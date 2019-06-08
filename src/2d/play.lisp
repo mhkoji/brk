@@ -1,21 +1,19 @@
-(defpackage :brk.play.scenes.playing-2d
+(defpackage :brk.2d.play
   (:use :cl)
   (:export :scene
            :scene-world
-           :create-world
-           :create-initial-state
            :state-paddle-position
            :state-ball-position
            :state-ball-velocity
            :state-bricks
 
-           :recorded-scene
-           :recorded-scene-states
+           :recording-scene
+           :recording-scene-states
            :call-with-update-world
 
            :playing-back-scene
            :playing-back-scene-increment-idnex!))
-(in-package :brk.play.scenes.playing-2d)
+(in-package :brk.2d.play)
 
 (defclass scene ()
   ((world
@@ -42,6 +40,8 @@
   ((position
     :initarg :position
     :reader brick-position)))
+
+(defclass world (brk.2d:world scene-ref) ())
 
 (defun create-world (scene)
   (make-instance 'world
@@ -71,17 +71,23 @@
                      (make-instance 'brick :w 30 :h 5 :position pos))))))
 
 
-(defclass recorded-scene (scene)
+(defclass recording-scene (scene)
   ((states
     :initform nil
     :initarg :states
-    :accessor recorded-scene-states)
+    :accessor recording-scene-states)
    (updates
     :initform nil
-    :accessor recorded-scene-updates)))
+    :accessor recording-scene-updates)))
 
-(defmethod scene-current-state ((scene recorded-scene))
-  (car (recorded-scene-states scene)))
+(defmethod initialize-instance :after ((scene recording-scene) &key)
+  (with-accessors ((world scene-world)
+                   (states recording-scene-states)) scene
+    (setf world (create-world scene))
+    (setf states (list (create-initial-state)))))
+
+(defmethod scene-current-state ((scene recording-scene))
+  (car (recording-scene-states scene)))
 
 (defmethod brk.2d:get-position ((paddle paddle))
   (state-paddle-position (scene-current-state (scene paddle))))
@@ -95,8 +101,6 @@
 (defmethod brk.2d:get-position ((brick brick))
   (brick-position brick))
 
-(defclass world (brk.2d:world scene-ref) ())
-
 (defmethod brk.2d:world-bricks ((world world))
   (state-bricks (scene-current-state (scene world))))
 
@@ -104,33 +108,34 @@
 (defmethod brk.2d:set-position ((paddle paddle) pos)
   (push (lambda (state)
           (setf (state-paddle-position state) pos))
-        (recorded-scene-updates (scene paddle))))
+        (recording-scene-updates (scene paddle))))
 
 (defmethod brk.2d:set-position ((ball ball) pos)
   (push (lambda (state)
           (setf (state-ball-position state) pos))
-        (recorded-scene-updates (scene ball))))
+        (recording-scene-updates (scene ball))))
 
 (defmethod brk.2d:set-velocity ((ball ball) v)
   (push (lambda (state)
           (setf (state-ball-velocity state) v))
-        (recorded-scene-updates (scene ball))))
+        (recording-scene-updates (scene ball))))
 
 (defmethod brk.2d:set-world-bricks ((world world) (bricks list))
   (push (lambda (state)
           (setf (state-bricks state) bricks))
-        (recorded-scene-updates (scene world))))
+        (recording-scene-updates (scene world))))
 
-(defun apply-updates! (recorded-scene)
-  (let ((state (copy-state (scene-current-state recorded-scene))))
-    (dolist (fn (recorded-scene-updates recorded-scene))
+
+(defun apply-updates! (recording-scene)
+  (let ((state (copy-state (scene-current-state recording-scene))))
+    (dolist (fn (recording-scene-updates recording-scene))
       (funcall fn state))
-    (push state (recorded-scene-states recorded-scene))
-    (setf (recorded-scene-updates recorded-scene) nil)))
+    (push state (recording-scene-states recording-scene))
+    (setf (recording-scene-updates recording-scene) nil)))
 
-(defun call-with-update-world (recorded-scene fn)
-  (funcall fn (scene-world recorded-scene))
-  (apply-updates! recorded-scene))
+(defun call-with-update-world (recording-scene fn)
+  (funcall fn (scene-world recording-scene))
+  (apply-updates! recording-scene))
 
 
 (defclass playing-back-scene (scene)
@@ -140,6 +145,10 @@
    (index
     :initform 0
     :accessor playing-back-scene-index)))
+
+(defmethod initialize-instance :after ((scene playing-back-scene) &key)
+  (with-accessors ((world scene-world)) scene
+    (setf world (create-world scene))))
 
 (defmethod scene-current-state ((scene playing-back-scene))
   (nth (playing-back-scene-index scene) (playing-back-scene-states scene)))

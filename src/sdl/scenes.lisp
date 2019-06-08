@@ -1,9 +1,9 @@
-(defpackage :brk.play.scenes
+(defpackage :brk.sdl.scenes
   (:use :cl)
   (:export :handle-idle
            :title-scene
            :playing-scene))
-(in-package :brk.play.scenes)
+(in-package :brk.sdl.scenes)
 
 (defgeneric handle-idle (scene))
 
@@ -81,17 +81,10 @@
         ((sdl:key-down-p :sdl-key-right)
          (brk.2d:move-paddle-right world))))
 
-(defclass playing-scene (brk.play.scenes.playing-2d:recorded-scene) ())
-
-(defmethod initialize-instance :after ((scene playing-scene) &key)
-  (with-accessors
-        ((world brk.play.scenes.playing-2d:scene-world)
-         (states brk.play.scenes.playing-2d:recorded-scene-states)) scene
-    (setf world (brk.play.scenes.playing-2d:create-world scene))
-    (setf states (list (brk.play.scenes.playing-2d:create-initial-state)))))
+(defclass playing-scene (brk.2d.play:recording-scene) ())
 
 (defun get-non-playing-world! (playing-scene)
-  (let ((world (brk.play.scenes.playing-2d:scene-world playing-scene)))
+  (let ((world (brk.2d.play:scene-world playing-scene)))
     (let ((ball (brk.2d:world-ball world))
           (paddle (brk.2d:world-paddle world)))
       (change-class world 'world
@@ -101,11 +94,11 @@
                              :position (brk.2d:get-position paddle))))))
 
 (defmethod handle-idle ((scene playing-scene))
-  (brk.play.scenes.playing-2d:call-with-update-world scene
+  (brk.2d.play:call-with-update-world scene
     (lambda (world)
       (move-paddle world)
       (brk.2d:move-ball world)))
-  (let ((world (brk.play.scenes.playing-2d:scene-world scene)))
+  (let ((world (brk.2d.play:scene-world scene)))
     (clear-display)
     (draw-world world sdl:*default-display*)
     (sdl:update-display)
@@ -113,8 +106,7 @@
            (make-instance 'finished-scene
                           :world (get-non-playing-world! scene)))
           ((brk.2d:ball-out-of-world-p world)
-           (let ((states (brk.play.scenes.playing-2d:recorded-scene-states
-                          scene)))
+           (let ((states (brk.2d.play:recording-scene-states scene)))
              (make-instance 'playing-back-scene :states (reverse states))))
           (t
            scene))))
@@ -183,15 +175,10 @@
 
 ;;;
 
-(defclass playing-back-scene
-    (brk.play.scenes.playing-2d:playing-back-scene) ())
-
-(defmethod initialize-instance :after ((scene playing-back-scene) &key)
-  (with-accessors ((world brk.play.scenes.playing-2d:scene-world)) scene
-    (setf world (brk.play.scenes.playing-2d:create-world scene))))
+(defclass playing-back-scene (brk.2d.play:playing-back-scene) ())
 
 (defmethod handle-idle ((scene playing-back-scene))
-  (let ((world (brk.play.scenes.playing-2d:scene-world scene)))
+  (let ((world (brk.2d.play:scene-world scene)))
     (clear-display)
     (sdl:draw-string-solid-* "Playing back" 5 5)
     (draw-world world sdl:*default-display*)
@@ -199,10 +186,8 @@
   (let ((diff (cond ((sdl:key-down-p :sdl-key-down) +1)
                     ((sdl:key-down-p :sdl-key-up)   -1))))
     (when diff
-      (when (eql
-             (brk.play.scenes.playing-2d:playing-back-scene-increment-idnex!
-              scene diff)
-             :eof)
+      (when (eql (brk.2d.play:playing-back-scene-increment-idnex! scene diff)
+                 :eof)
         (return-from handle-idle
           (make-instance 'game-over-scene
                          :world (get-non-playing-world! scene))))))

@@ -2,8 +2,8 @@
   :serial t
   :pathname "src"
   :components
-  ((:file "2d")
-   (:file "play/scenes/playing-2d")
-   (:file "play/scenes/scenes")
-   (:file "play/play"))
+  ((:file "2d/2d")
+   (:file "2d/play")
+   (:file "sdl/scenes")
+   (:file "sdl/sdl"))
   :depends-on (:lispbuilder-sdl))
