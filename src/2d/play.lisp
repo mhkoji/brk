@@ -127,10 +127,14 @@
 
 
 (defun apply-updates! (recording-scene)
-  (let ((state (copy-state (scene-current-state recording-scene))))
-    (dolist (fn (recording-scene-updates recording-scene))
-      (funcall fn state))
-    (push state (recording-scene-states recording-scene))
+  (let ((new-state
+         (reduce (lambda (state fn)
+                   (funcall fn state)
+                   state)
+                 (recording-scene-updates recording-scene)
+                 :initial-value (copy-state
+                                 (scene-current-state recording-scene)))))
+    (push new-state (recording-scene-states recording-scene))
     (setf (recording-scene-updates recording-scene) nil)))
 
 (defun call-with-update-world (recording-scene fn)
