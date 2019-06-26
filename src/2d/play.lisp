@@ -11,8 +11,8 @@
            :recording-scene-states
            :call-with-update-world
 
-           :playing-back-scene
-           :playing-back-scene-increment-idnex!))
+           :replaying-scene
+           :replaying-scene-increment-index!))
 (in-package :brk.2d.play)
 
 (defclass scene ()
@@ -142,25 +142,25 @@
   (apply-updates! recording-scene))
 
 
-(defclass playing-back-scene (scene)
+(defclass replaying-scene (scene)
   ((states
     :initarg :states
-    :accessor playing-back-scene-states)
+    :accessor replaying-scene-states)
    (index
     :initform 0
-    :accessor playing-back-scene-index)))
+    :accessor replaying-scene-index)))
 
-(defmethod initialize-instance :after ((scene playing-back-scene) &key)
+(defmethod initialize-instance :after ((scene replaying-scene) &key)
   (with-accessors ((world scene-world)) scene
     (setf world (create-world scene))))
 
-(defmethod scene-current-state ((scene playing-back-scene))
-  (nth (playing-back-scene-index scene) (playing-back-scene-states scene)))
+(defmethod scene-current-state ((scene replaying-scene))
+  (nth (replaying-scene-index scene) (replaying-scene-states scene)))
 
-(defun playing-back-scene-increment-idnex! (playing-back-scene diff)
-  (let ((new-index (+ (playing-back-scene-index playing-back-scene) diff)))
+(defun replaying-scene-increment-index! (replaying-scene diff)
+  (let ((new-index (+ (replaying-scene-index replaying-scene) diff)))
     (when (<= 0 new-index)
       (if (< new-index
-             (length (playing-back-scene-states playing-back-scene)))
-          (setf (playing-back-scene-index playing-back-scene) new-index)
+             (length (replaying-scene-states replaying-scene)))
+          (setf (replaying-scene-index replaying-scene) new-index)
           :eof))))

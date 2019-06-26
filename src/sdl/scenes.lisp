@@ -15,18 +15,21 @@
 (defclass title-scene ()
   ((selected-option
     :initform :play
-    :accessor title-scene-selected-option)))
+    :accessor title-scene-selected-option)
+   (available-replays
+    :initform :available-replays
+    :reader title-scene-available-replays)))
 
 (defmethod handle-idle ((scene title-scene))
   (with-accessors ((selected-option title-scene-selected-option)) scene
     (clear-display)
     (sdl:draw-string-solid-* "Play" 20 20)
-    (sdl:draw-string-solid-* "Review plays" 20 40)
+    (sdl:draw-string-solid-* "View replays" 20 40)
     (let ((> ">"))
       (ecase selected-option
         (:play
          (sdl:draw-string-solid-* > 10 20))
-        (:review
+        (:view
          (sdl:draw-string-solid-* > 10 40))))
     (sdl:update-display)
     (cond ((and (sdl:key-down-p :sdl-key-return)
@@ -35,8 +38,8 @@
           (t
            (when (eql selected-option :play)
              (when (sdl:key-down-p :sdl-key-down)
-               (setf selected-option :review)))
-           (when (eql selected-option :review)
+               (setf selected-option :view)))
+           (when (eql selected-option :view)
              (when (sdl:key-down-p :sdl-key-up)
                (setf selected-option :play)))
            scene))))
@@ -107,7 +110,7 @@
                           :world (get-non-playing-world! scene)))
           ((brk.2d:ball-out-of-world-p world)
            (let ((states (brk.2d.play:recording-scene-states scene)))
-             (make-instance 'playing-back-scene :states (reverse states))))
+             (make-instance 'replaying-scene :states (reverse states))))
           (t
            scene))))
 
@@ -149,7 +152,7 @@
     (clear-display)
     (draw-paddle (brk.2d:world-paddle world) sdl:*default-display*)
     (sdl:draw-string-solid-* "Game Over!" 10 10)
-    (sdl:draw-string-solid-* "Press SPACE key to replay..." 10 20)
+    (sdl:draw-string-solid-* "Press SPACE key to play again..." 10 20)
     (sdl:update-display))
   (if (sdl:key-down-p :sdl-key-space)
       (make-instance 'playing-scene)
@@ -175,18 +178,18 @@
 
 ;;;
 
-(defclass playing-back-scene (brk.2d.play:playing-back-scene) ())
+(defclass replaying-scene (brk.2d.play:replaying-scene) ())
 
-(defmethod handle-idle ((scene playing-back-scene))
+(defmethod handle-idle ((scene replaying-scene))
   (let ((world (brk.2d.play:scene-world scene)))
     (clear-display)
-    (sdl:draw-string-solid-* "Playing back" 5 5)
+    (sdl:draw-string-solid-* "Replaying" 5 5)
     (draw-world world sdl:*default-display*)
     (sdl:update-display))
   (let ((diff (cond ((sdl:key-down-p :sdl-key-down) +1)
                     ((sdl:key-down-p :sdl-key-up)   -1))))
     (when diff
-      (when (eql (brk.2d.play:playing-back-scene-increment-idnex! scene diff)
+      (when (eql (brk.2d.play:replaying-scene-increment-index! scene diff)
                  :eof)
         (return-from handle-idle
           (make-instance 'game-over-scene
