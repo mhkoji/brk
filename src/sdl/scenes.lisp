@@ -32,17 +32,79 @@
         (:view
          (sdl:draw-string-solid-* > 10 40))))
     (sdl:update-display)
-    (cond ((and (sdl:key-down-p :sdl-key-return)
+    (cond ((and (sdl:key-released-p :sdl-key-return)
                 (eql selected-option :play))
            (make-instance 'playing-scene))
+          ((and (sdl:key-released-p :sdl-key-return)
+                (eql selected-option :view)
+                (title-scene-available-replays scene))
+           (make-instance 'select-replay-scene
+                          :replays (list 1 2 3)
+                          :prev-scene scene))
           (t
            (when (eql selected-option :play)
-             (when (sdl:key-down-p :sdl-key-down)
+             (when (sdl:key-released-p :sdl-key-down)
                (setf selected-option :view)))
            (when (eql selected-option :view)
-             (when (sdl:key-down-p :sdl-key-up)
+             (when (sdl:key-released-p :sdl-key-up)
                (setf selected-option :play)))
            scene))))
+
+;;;
+
+(defclass select-replay-scene ()
+  ((prev-scene
+    :initarg :prev-scene
+    :reader select-replay-scene-prev-scene)
+   (replays
+    :initform nil
+    :initarg :replays
+    :reader select-replay-scene-replays)
+   (selected-item
+    :initform (list :prev-scene)
+    :accessor select-replay-scene-selected-item)))
+
+(defmethod handle-idle ((scene select-replay-scene))
+  (with-accessors ((item select-replay-scene-selected-item)
+                   (replays select-replay-scene-replays)) scene
+    (clear-display)
+    (sdl:draw-string-solid-* "Back" 20 20)
+    (loop for i from 0
+          repeat (length replays)
+          do (progn
+               (sdl:draw-string-solid-* (format nil "~A" (1+ i))
+                                        20
+                                        (* 20 (+ 2 i)))))
+    (let ((> ">"))
+      (ecase (first item)
+        (:prev-scene
+         (sdl:draw-string-solid-* > 10 20))
+        (:replay
+         (sdl:draw-string-solid-* > 10 (* 20 (+ 2 (second item)))))))
+    (sdl:update-display)
+    (case (first item)
+      (:prev-scene
+       (cond ((sdl:key-released-p :sdl-key-return)
+              (select-replay-scene-prev-scene scene))
+             ((sdl:key-released-p :sdl-key-down)
+              (setf item (list :replay 0))
+              scene)
+             (t
+              scene)))
+      (:replay
+       (cond ((sdl:key-released-p :sdl-key-return)
+              scene)
+             ((and (sdl:key-released-p :sdl-key-down)
+                   (< (1+ (second item)) (length replays)))
+              (incf (second item))
+              scene)
+             ((and (sdl:key-released-p :sdl-key-up))
+              (if (= 0 (second item))
+                  (setf item (list :prev-scene))
+                  (decf (second item)))
+              scene)
+             (t
+              scene))))))
 
 ;;;
 
