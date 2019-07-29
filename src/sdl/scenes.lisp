@@ -248,12 +248,15 @@
     (sdl:draw-string-solid-* "Replaying" 5 5)
     (draw-world world sdl:*default-display*)
     (sdl:update-display))
-  (let ((diff (cond ((sdl:key-down-p :sdl-key-down) +1)
-                    ((sdl:key-down-p :sdl-key-up)   -1))))
-    (when diff
-      (when (eql (brk.2d.play:replaying-scene-increment-index! scene diff)
-                 :eof)
-        (return-from handle-idle
-          (make-instance 'game-over-scene
-                         :world (get-non-playing-world! scene))))))
-  scene)
+  (labels ((make-next-scene ()
+             (make-instance 'game-over-scene
+                            :world (get-non-playing-world! scene))))
+    (if (sdl:key-down-p :sdl-key-return)
+        (make-next-scene)
+        (or (let ((diff (cond ((sdl:key-down-p :sdl-key-down) +1)
+                              ((sdl:key-down-p :sdl-key-up)   -1))))
+              (when diff
+                (when (eql (brk.2d.play:replaying-scene-increment-index! scene diff)
+                           :eof)
+                  (make-next-scene))))
+            scene))))
