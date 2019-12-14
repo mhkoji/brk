@@ -208,12 +208,15 @@
                                   :y (- (velocity-y vel)))))
       (move-ball-by-velocity ball new-vel))))
 
-(defun handle-ball-collision-against-bricks (world ball collided-bricks)
+(defun drop-world-bricks (world collided-bricks)
   (let ((remaining-bricks (remove-if (lambda (brick)
                                        (find brick collided-bricks))
                                      (world-bricks world))))
-    (set-world-bricks world remaining-bricks)
-    (move-ball-to-opposite-direction ball)))
+    (set-world-bricks world remaining-bricks)))
+
+(defun handle-ball-collision-against-bricks (world ball collided-bricks)
+  (drop-world-bricks world collided-bricks)
+  (move-ball-to-opposite-direction ball))
 
 (defun move-ball (world)
   (let ((ball (world-ball world)))
